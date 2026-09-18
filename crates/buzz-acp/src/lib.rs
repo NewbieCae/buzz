@@ -5869,60 +5869,69 @@ async fn run_models(args: ModelsArgs) -> Result<()> {
 }
 
 fn build_mcp_servers(config: &Config) -> Vec<McpServer> {
+    // File-defined servers (`--mcp-servers-file`) are external/untrusted by
+    // default and must NOT inherit Buzz credentials — only their explicitly
+    // declared `env` entries are passed through. They come after the legacy
+    // credentialed server below, which retains its existing behavior.
+    let mut servers = config.mcp_servers.clone();
     if config.mcp_command.is_empty() {
-        return vec![];
+        return servers;
     }
-    vec![McpServer {
-        name: std::path::Path::new(&config.mcp_command)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("mcp")
-            .to_string(),
-        command: config.mcp_command.clone(),
-        args: vec![],
-        env: {
-            let mut env = vec![
-                EnvVar {
-                    name: "BUZZ_RELAY_URL".into(),
-                    value: config.relay_url.clone(),
-                },
-                EnvVar {
-                    name: "BUZZ_PRIVATE_KEY".into(),
-                    // bech32 encoding of a valid secret key is infallible.
-                    // Panic here is correct: injecting a bogus secret would cause
-                    // delayed, hard-to-diagnose agent failures downstream.
-                    value: config
-                        .keys
-                        .secret_key()
-                        .to_bech32()
-                        .expect("secret key bech32 encoding should never fail"),
-                },
-            ];
-            // Forward BUZZ_AUTH_TAG (NIP-OA owner attestation credential)
-            // so the MCP server can attach it to every signed event.
-            if let Ok(auth_tag) = std::env::var("BUZZ_AUTH_TAG") {
-                if !auth_tag.is_empty() {
-                    env.push(EnvVar {
-                        name: "BUZZ_AUTH_TAG".into(),
-                        value: auth_tag,
-                    });
+    servers.insert(
+        0,
+        McpServer {
+            name: std::path::Path::new(&config.mcp_command)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("mcp")
+                .to_string(),
+            command: config.mcp_command.clone(),
+            args: vec![],
+            env: {
+                let mut env = vec![
+                    EnvVar {
+                        name: "BUZZ_RELAY_URL".into(),
+                        value: config.relay_url.clone(),
+                    },
+                    EnvVar {
+                        name: "BUZZ_PRIVATE_KEY".into(),
+                        // bech32 encoding of a valid secret key is infallible.
+                        // Panic here is correct: injecting a bogus secret would cause
+                        // delayed, hard-to-diagnose agent failures downstream.
+                        value: config
+                            .keys
+                            .secret_key()
+                            .to_bech32()
+                            .expect("secret key bech32 encoding should never fail"),
+                    },
+                ];
+                // Forward BUZZ_AUTH_TAG (NIP-OA owner attestation credential)
+                // so the MCP server can attach it to every signed event.
+                if let Ok(auth_tag) = std::env::var("BUZZ_AUTH_TAG") {
+                    if !auth_tag.is_empty() {
+                        env.push(EnvVar {
+                            name: "BUZZ_AUTH_TAG".into(),
+                            value: auth_tag,
+                        });
+                    }
                 }
-            }
-            // Forward the agent's display name so dev-mcp can use it as the git
-            // author name instead of the raw npub. Read from the process env
-            // rather than Config: this is a pass-through of a contract owned
-            // upstream, and absent simply means dev-mcp falls back to the npub.
-            if let Ok(display_name) = std::env::var("BUZZ_ACP_DISPLAY_NAME") {
-                if !display_name.is_empty() {
-                    env.push(EnvVar {
-                        name: "BUZZ_ACP_DISPLAY_NAME".into(),
-                        value: display_name,
-                    });
+                // Forward the agent's display name so dev-mcp can use it as the git
+                // author name instead of the raw npub. Read from the process env
+                // rather than Config: this is a pass-through of a contract owned
+                // upstream, and absent simply means dev-mcp falls back to the npub.
+                if let Ok(display_name) = std::env::var("BUZZ_ACP_DISPLAY_NAME") {
+                    if !display_name.is_empty() {
+                        env.push(EnvVar {
+                            name: "BUZZ_ACP_DISPLAY_NAME".into(),
+                            value: display_name,
+                        });
+                    }
                 }
-            }
-            env
+                env
+            },
         },
-    }]
+    );
+    servers
 }
 
 #[cfg(test)]
@@ -9136,6 +9145,7 @@ mod build_mcp_servers_tests {
             agent_command: "goose".into(),
             agent_args: vec!["acp".into()],
             mcp_command: "test-mcp-server".into(),
+            mcp_servers: vec![],
             idle_timeout_secs: config::DEFAULT_IDLE_TIMEOUT_SECS,
             max_turn_duration_secs: config::DEFAULT_MAX_TURN_DURATION_SECS,
             agents: 1,
@@ -9325,6 +9335,81 @@ mod build_mcp_servers_tests {
             "Path::new(\".\").file_stem() is None — should fall back to \"mcp\""
         );
     }
+
+    #[test]
+    fn configured_mcp_servers_are_appended_without_buzz_credentials() {
+        let mut config = test_config();
+        config.mcp_servers = vec![McpServer {
+            name: "meet".into(),
+            command: "/some/python".into(),
+            args: vec!["/some/server.py".into()],
+            env: vec![EnvVar {
+                name: "MEET_SOURCE".into(),
+                value: "fixture".into(),
+            }],
+        }];
+
+        let servers = build_mcp_servers(&config);
+
+        assert_eq!(
+            servers.len(),
+            2,
+            "legacy mcp_command server + file-defined server should coexist"
+        );
+        assert_eq!(servers[0].name, "test-mcp-server");
+        assert!(
+            servers[0]
+                .env
+                .iter()
+                .any(|entry| entry.name == "BUZZ_PRIVATE_KEY"),
+            "legacy mcp_command server keeps its existing credential behavior"
+        );
+        assert_eq!(servers[1], config.mcp_servers[0]);
+        for forbidden in ["BUZZ_PRIVATE_KEY", "BUZZ_RELAY_URL", "BUZZ_AUTH_TAG"] {
+            assert!(
+                !servers[1].env.iter().any(|entry| entry.name == forbidden),
+                "file-defined MCP server must not inherit {forbidden}"
+            );
+        }
+        assert_eq!(
+            servers[1].env,
+            vec![EnvVar {
+                name: "MEET_SOURCE".into(),
+                value: "fixture".into(),
+            }],
+            "file-defined server should only carry its explicitly declared env vars"
+        );
+    }
+
+    #[test]
+    fn configured_mcp_servers_work_without_legacy_mcp_command() {
+        let mut config = test_config();
+        config.mcp_command.clear();
+        config.mcp_servers = vec![McpServer {
+            name: "meet".into(),
+            command: "/some/python".into(),
+            args: vec!["/some/server.py".into()],
+            env: vec![],
+        }];
+
+        let servers = build_mcp_servers(&config);
+
+        assert_eq!(servers, config.mcp_servers);
+    }
+
+    #[test]
+    fn no_mcp_command_and_no_mcp_servers_produces_no_servers() {
+        let mut config = test_config();
+        config.mcp_command.clear();
+        // config.mcp_servers already empty from test_config()
+
+        let servers = build_mcp_servers(&config);
+
+        assert!(
+            servers.is_empty(),
+            "with neither mechanism configured, no servers should be produced"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -9362,6 +9447,7 @@ mod error_outcome_emission_tests {
             agent_command: "true".into(),
             agent_args: vec![],
             mcp_command: "test-mcp-server".into(),
+            mcp_servers: vec![],
             idle_timeout_secs: config::DEFAULT_IDLE_TIMEOUT_SECS,
             max_turn_duration_secs: config::DEFAULT_MAX_TURN_DURATION_SECS,
             agents: 1,

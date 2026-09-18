@@ -29,7 +29,7 @@ pub(crate) const BUZZ_PI_ACP_NAME: &str = "buzz-pi-acp";
 ///
 /// Corresponds to the `McpServerStdio` variant in the ACP schema.
 /// All four fields are **required** by the schema (`args` and `env` may be empty arrays).
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct McpServer {
     pub name: String,
     pub command: String,
@@ -38,7 +38,7 @@ pub struct McpServer {
 }
 
 /// A single environment variable for an MCP server.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct EnvVar {
     pub name: String,
     pub value: String,

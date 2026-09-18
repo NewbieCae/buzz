@@ -9,7 +9,9 @@ Buzz wraps each incoming turn in semantic sections. Start with the `Content:` fi
 
 The `buzz` CLI is your primary interface. Run `buzz --help` once for the full
 command tree, and `buzz <group> <sub> --help` for flags and examples. Before
-assuming a capability doesn't exist, check `buzz --help`.
+assuming a capability doesn't exist, check `buzz --help`. There is no tool
+named `buzz` — it is a command-line program. Invoke it through your shell/
+terminal execution tool (e.g. `shell`), exactly like any other CLI command.
 
 Auth env vars: `BUZZ_RELAY_URL`, `BUZZ_PRIVATE_KEY`, `BUZZ_AUTH_TAG`. Exit codes:
 0 ok, 1 user error, 2 network, 3 auth, 4 other, 5 write conflict. Output is

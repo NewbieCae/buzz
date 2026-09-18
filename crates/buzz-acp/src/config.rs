@@ -13,6 +13,7 @@ use thiserror::Error;
 use url::Url;
 use uuid::Uuid;
 
+use crate::acp::McpServer;
 use crate::filter::SubscriptionRule;
 
 /// Default idle timeout (seconds) when neither `--idle-timeout` nor the
@@ -266,6 +267,13 @@ pub struct CliArgs {
 
     #[arg(long, env = "BUZZ_ACP_MCP_COMMAND", default_value = "")]
     pub mcp_command: String,
+
+    /// JSON file containing additional ACP stdio MCP server definitions
+    /// (array of `{name, command, args, env}`). These servers do NOT
+    /// inherit Buzz credentials (BUZZ_PRIVATE_KEY/BUZZ_RELAY_URL/BUZZ_AUTH_TAG)
+    /// — only the env vars explicitly listed in each entry are passed through.
+    #[arg(long, env = "BUZZ_ACP_MCP_SERVERS_FILE")]
+    pub mcp_servers_file: Option<PathBuf>,
 
     /// Idle timeout: max seconds of silence before killing a turn.
     /// Resets on any agent stdout activity.
@@ -543,6 +551,9 @@ pub struct Config {
     pub agent_command: String,
     pub agent_args: Vec<String>,
     pub mcp_command: String,
+    /// Additional ACP stdio MCP servers loaded from `mcp_servers_file`.
+    /// Unlike `mcp_command`, these never inherit Buzz credentials.
+    pub mcp_servers: Vec<McpServer>,
     pub idle_timeout_secs: u64,
     pub max_turn_duration_secs: u64,
     pub agents: u32,
@@ -1150,12 +1161,18 @@ impl Config {
 
         validate_multiple_event_handling(args.multiple_event_handling, args.dedup)?;
 
+        let mcp_servers = match &args.mcp_servers_file {
+            Some(path) => load_mcp_servers_file(path)?,
+            None => Vec::new(),
+        };
+
         let config = Config {
             keys,
             relay_url: args.relay_url,
             agent_command,
             agent_args,
             mcp_command: args.mcp_command,
+            mcp_servers,
             idle_timeout_secs,
             max_turn_duration_secs,
             agents: args.agents,
@@ -1225,12 +1242,13 @@ impl Config {
             format!(" allowed_respond_to=[{}]", modes.join(","))
         };
         format!(
-            "relay={} pubkey={} agent_cmd={} {} mcp_cmd={} idle_timeout={}s max_turn={}s agents={} heartbeat={}s subscribe={:?} dedup={:?} session_policy={} meh={:?} ignore_self={} context_limit={} max_turns_per_session={} presence={} typing={} memory={} model={} permission_mode={} {}{}",
+            "relay={} pubkey={} agent_cmd={} {} mcp_cmd={} additional_mcp_servers={} idle_timeout={}s max_turn={}s agents={} heartbeat={}s subscribe={:?} dedup={:?} session_policy={} meh={:?} ignore_self={} context_limit={} max_turns_per_session={} presence={} typing={} memory={} model={} permission_mode={} {}{}",
             self.relay_url,
             self.keys.public_key().to_hex(),
             self.agent_command,
             self.agent_args.join(" "),
             self.mcp_command,
+            self.mcp_servers.len(),
             self.idle_timeout_secs,
             self.max_turn_duration_secs,
             self.agents,
@@ -1251,6 +1269,27 @@ impl Config {
             allowed_respond_to_detail,
         )
     }
+}
+
+/// Load additional MCP server definitions from a JSON file
+/// (`--mcp-servers-file` / `BUZZ_ACP_MCP_SERVERS_FILE`).
+///
+/// These servers are external and untrusted by default: unlike the legacy
+/// `--mcp-command` server, they must NOT be auto-granted Buzz credentials.
+/// See `build_mcp_servers` in `lib.rs`.
+fn load_mcp_servers_file(path: &std::path::Path) -> Result<Vec<McpServer>, ConfigError> {
+    let content = std::fs::read_to_string(path).map_err(|error| {
+        ConfigError::ConfigFile(format!(
+            "failed to read MCP servers file {}: {error}",
+            path.display()
+        ))
+    })?;
+    serde_json::from_str(&content).map_err(|error| {
+        ConfigError::ConfigFile(format!(
+            "invalid MCP servers file {}: {error}",
+            path.display()
+        ))
+    })
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -1540,6 +1579,7 @@ mod tests {
             agent_command: "goose".into(),
             agent_args: vec!["acp".into()],
             mcp_command: "".into(),
+            mcp_servers: vec![],
             idle_timeout_secs: DEFAULT_IDLE_TIMEOUT_SECS,
             max_turn_duration_secs: DEFAULT_MAX_TURN_DURATION_SECS,
             agents: 1,
@@ -2947,6 +2987,111 @@ channels = "ALL"
     // A minimal valid private key for test use (secp256k1 scalar = 1).
     const TEST_PRIVATE_KEY: &str =
         "0000000000000000000000000000000000000000000000000000000000000001";
+
+    #[test]
+    fn mcp_servers_file_loads_acp_stdio_definitions() {
+        let path = std::env::temp_dir().join(format!(
+            "buzz-acp-mcp-servers-{}.json",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::write(
+            &path,
+            r#"[
+                {
+                    "name": "meet",
+                    "command": "/usr/bin/python3",
+                    "args": ["/opt/meet-mcp/server.py"],
+                    "env": [{"name": "MEET_SOURCE", "value": "fixture"}]
+                },
+                {
+                    "name": "search",
+                    "command": "/usr/local/bin/search-mcp",
+                    "args": [],
+                    "env": []
+                }
+            ]"#,
+        )
+        .expect("write MCP servers fixture");
+
+        let path_arg = path.display().to_string();
+        let args = CliArgs::try_parse_from([
+            "buzz-acp",
+            "--private-key",
+            TEST_PRIVATE_KEY,
+            "--mcp-servers-file",
+            &path_arg,
+        ])
+        .expect("parse MCP servers file option");
+        let config = Config::from_args(args).expect("load MCP servers file through Config");
+        std::fs::remove_file(&path).expect("remove MCP servers fixture");
+
+        let servers = config.mcp_servers;
+        assert_eq!(servers.len(), 2, "both entries in the file should load");
+        assert_eq!(servers[0].name, "meet");
+        assert_eq!(servers[0].command, "/usr/bin/python3");
+        assert_eq!(servers[0].args, ["/opt/meet-mcp/server.py"]);
+        assert_eq!(
+            servers[0].env,
+            [crate::acp::EnvVar {
+                name: "MEET_SOURCE".into(),
+                value: "fixture".into(),
+            }]
+        );
+        assert_eq!(
+            servers[1],
+            crate::acp::McpServer {
+                name: "search".into(),
+                command: "/usr/local/bin/search-mcp".into(),
+                args: vec![],
+                env: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn mcp_servers_file_reports_invalid_json_with_its_path() {
+        let path = std::env::temp_dir().join(format!(
+            "buzz-acp-invalid-mcp-servers-{}.json",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::write(&path, "not json").expect("write invalid MCP servers fixture");
+
+        let error = load_mcp_servers_file(&path).expect_err("invalid JSON must fail");
+        std::fs::remove_file(&path).expect("remove invalid MCP servers fixture");
+
+        let message = error.to_string();
+        assert!(message.contains("invalid MCP servers file"), "{message}");
+        assert!(message.contains(&path.display().to_string()), "{message}");
+    }
+
+    #[test]
+    fn mcp_servers_file_reports_unreadable_path_with_its_path() {
+        let path = std::env::temp_dir().join(format!(
+            "buzz-acp-missing-mcp-servers-{}.json",
+            uuid::Uuid::new_v4()
+        ));
+        // Deliberately do not create the file.
+        let error = load_mcp_servers_file(&path).expect_err("missing file must fail");
+
+        let message = error.to_string();
+        assert!(
+            message.contains("failed to read MCP servers file"),
+            "{message}"
+        );
+        assert!(message.contains(&path.display().to_string()), "{message}");
+    }
+
+    #[test]
+    fn no_mcp_servers_file_produces_no_additional_servers() {
+        let args = CliArgs::try_parse_from(["buzz-acp", "--private-key", TEST_PRIVATE_KEY])
+            .expect("clap should parse args without --mcp-servers-file");
+        let config = Config::from_args(args).expect("from_args should succeed");
+
+        assert!(
+            config.mcp_servers.is_empty(),
+            "omitting --mcp-servers-file must leave mcp_servers empty"
+        );
+    }
 
     #[test]
     fn allowed_respond_to_full_path_rejects_disallowed_mode() {
