@@ -1,288 +1,316 @@
-<h1 align="center">Buzz 🐝</h1>
+<h1 align="center">Buzz × Mission Control</h1>
 
 <p align="center">
-  <strong>A workspace where humans and agents build together, on a relay you own.</strong>
+  <strong>This is a fork of the open-source <a href="https://github.com/block/buzz">Buzz</a> project, extended during the DINUM × 42 Hackathon 2026 to carry <a href="https://github.com/NewbieCae/mission-controle">Mission Control</a>.</strong>
 </p>
 
 <p align="center">
-  <a href="VISION.md">Vision</a> ·
-  <a href="VISION_SOVEREIGN.md">Sovereign</a> ·
-  <a href="VISION_PROJECTS.md">Forge</a> ·
-  <a href="VISION_AGENT.md">Agents</a> ·
-  <a href="ARCHITECTURE.md">Architecture</a> ·
-  <a href="RELEASING.md">Releasing</a> ·
+  <b>Un channel. Une équipe. Un agent IA. Tous leurs outils.</b>
+</p>
+
+<p align="center">
+  <a href="#what-is-mission-control">Mission Control</a> ·
+  <a href="#why-buzz">Why Buzz</a> ·
+  <a href="#what-we-added">What we added</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#repository-relationship">Repos</a> ·
+  <a href="#upstream-buzz">Upstream</a> ·
   <a href="LICENSE">Apache 2.0</a>
 </p>
 
-<p align="center">
-  <img src="docs/assets/screenshots/channel-thread.png" alt="A Buzz project channel where people and an agent coordinate on a release plan" width="100%">
-</p>
+---
 
-<p align="center">
-  <sub><em>People and agents building together in the same room.</em></sub>
-</p>
+This repository is **not our original product**. Buzz is an existing
+open-source collaborative workspace built by [Block, Inc.](https://block.xyz).
+We forked it and made one focused addition on the `mission-control-mvp`
+branch: a way for a Buzz-hosted agent to load an arbitrary set of MCP tool
+servers from a config file, so a single shared agent — Mission Control — can
+sit in a Buzz channel and reach several tools at once.
+
+The rest of what makes Mission Control an "agent," how it reasons, and how it
+talks to Docs and Grist, lives in a separate repository:
+**[NewbieCae/mission-controle](https://github.com/NewbieCae/mission-controle)**
+(branch `feat/mission-control-ai`). This fork is the collaborative surface it
+runs inside of, not the orchestration core itself.
 
 ---
 
-## What is this, really?
+## What is Mission Control?
 
-Buzz is a self-hostable workspace where humans and AI agents share the same rooms.
+Most AI assistants live in a private window next to the work: one human, one
+chatbot, no shared context. Mission Control flips that around.
 
-A Buzz **community** is the workspace a user reaches by URL. In the single-relay
-setup that ships today, the relay URL selects exactly one community. A hosted
-operator can serve many communities behind many domains or subdomains, but the
-client-facing rule stays the same: the URL is authoritative for the workspace,
-and all tenant-observable state under that URL is community-local.
+```
+HUMAN ↔ HUMAN ↔ MISSION CONTROL
+```
 
-It's a Nostr relay: every message, reaction, workflow step, review approval, and git event is a signed event in one log. Same shape, same identity model, same audit trail, whether the author is a person or a process.
+Several teammates talk in the same Buzz channel, and Mission Control
+participates in that channel as an agent — same room, same thread, same
+audit trail — instead of as a side conversation only one person can see.
+*The AI is no longer in a separate window next to the work. It becomes part
+of the team.*
 
-In practice it feels like a team workspace. Under the hood it's an event log with taste and a suspicious number of Rust crates.
+The orchestration logic — how Mission Control plans, calls tools, and talks
+to Docs/Grist — is maintained in the core repository:
 
-Yes, it's another AI-adjacent developer tool. We're sorry. The difference is what agents can actually *do* once they're inside: open repos, send patches, review code, run workflows, edit canvases, orchestrate other agents, drop into voice huddles, create channels, and pull in whoever needs to see it. The same affordances as a human teammate, the same audit trail, a different keypair.
+**[github.com/NewbieCae/mission-controle](https://github.com/NewbieCae/mission-controle)** (`feat/mission-control-ai`)
 
----
-
-## Stuff you do in Buzz
-
-- **Ask the project a question and get an answer with receipts.** Agents search six months of history and post the threads, not vibes.
-- **Let an agent triage a bug without giving it the keys to the kingdom.** Agents have their own keys, their own channel memberships, and their own audit trail. Scoped by identity, not by permission flags — the same way you'd scope a teammate.
-- **Turn a feature branch into a room** where patches, CI, review, and the merge decision live together — so the channel becomes the record of why the code exists.
-- **Search the conversation, the patch, the workflow run, and the approval in one place** — because they're all the same kind of event.
-- **Let an agent run the workspace, not just talk in it.** Channels, canvases, workflows, huddles — agents have the same surface area as humans, with their own keys and their own audit trail.
+This README does not duplicate that project's docs; see it for the full
+picture.
 
 ---
 
-## A look inside
+## Why Buzz?
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/assets/screenshots/channel-agents.png" alt="People and agents collaborating in a Buzz engineering channel and reacting with emoji" width="100%"><br>
-      <sub><strong>Agents are members, not bots.</strong> Add an agent to a channel the same way you add a person.</sub>
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/assets/screenshots/create-channel.png" alt="The Add a channel dialog with search, filters, and channels to join or create" width="100%"><br>
-      <sub><strong>Spin up a room in seconds.</strong> Name it, describe it, make it private.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" valign="top">
-      <img src="docs/assets/screenshots/media-comments.png" alt="A video playing in Buzz with frame-anchored comments in a side panel" width="100%"><br>
-      <sub><strong>Media you can talk about.</strong> Leave comments pinned to specific frames.</sub>
-    </td>
-  </tr>
-</table>
+Buzz is a self-hostable Nostr relay with a chat-shaped client on top: every
+message, reaction, and agent action is a signed event in one log, and agents
+can join channels as members with their own keys — not as bots bolted onto
+webhooks. That's an upstream Buzz property, not something we built, and it's
+exactly the surface Mission Control needed: a real multi-human channel that
+an agent can be a first-class participant in, with `buzz-cli` giving that
+agent a JSON-in/JSON-out way to read and post in the room.
+
+We didn't create this capability. We used it as the collaborative interface
+for Mission Control.
 
 ---
 
-## Why Buzz is better
+## What we added
 
-One community. One identity model. One event log. Humans, agents, workflows, and repos all speak the same protocol, sign with the same kind of key, and end up in the same search index. In the default self-hosted deployment, one relay hosts one community; in a hosted multi-tenant deployment, each community keeps that same semantic boundary even when the backend shares Postgres, Redis, and object storage.
+Everything below is scoped to the `mission-control-mvp` branch (diffed
+against this fork's `main`, one commit). Nothing here is upstream Buzz work.
 
-The bet is that one community can do what teams currently fake with chat, forges, bots, CI dashboards, release tools, search indexes, and a pile of glue code. Not all at once, not magically, but with one substrate instead of seven tabs pretending they know about each other.
+- **Multiple MCP servers per agent.** Buzz's agent harness (`buzz-acp`)
+  previously wired at most one MCP tool server per agent
+  (`--mcp-command` / `BUZZ_ACP_MCP_COMMAND`). We added a second, additive
+  mechanism: **`--mcp-servers-file`** / **`BUZZ_ACP_MCP_SERVERS_FILE`**, which
+  points at a JSON file declaring a list of stdio MCP servers
+  (`{name, command, args, env}`). Both mechanisms can be used together.
+- **Credential isolation by design.** The legacy `--mcp-command` server
+  still auto-receives Buzz's own credentials
+  (`BUZZ_PRIVATE_KEY` / `BUZZ_RELAY_URL` / `BUZZ_AUTH_TAG`) because it's
+  trusted, in-repo tooling. Servers loaded from `--mcp-servers-file` are
+  treated as **external and untrusted by default** — they receive only the
+  environment variables each entry explicitly lists, never Buzz's keys.
+- **Reserved-key protection.** `BUZZ_ACP_MCP_SERVERS_FILE` was added to the
+  desktop app's list of reserved environment keys, so a managed agent's
+  launch config can't silently override it — the same treatment already
+  given to `BUZZ_ACP_MCP_COMMAND`.
+- **A one-line prompt clarification** in `base_prompt.md`: `buzz` is a CLI
+  binary, not a tool name — invoke it through the shell tool.
+- **Tests** covering the new file-loading path, the credential-isolation
+  boundary, and that omitting the flag changes nothing (`crates/buzz-acp/src/config.rs`,
+  `crates/buzz-acp/src/lib.rs`).
+- **A small, illustrative Python stub** at `examples/mission-control/` —
+  dataclasses (`ActionItem`, `Decision`, `MeetingAnalysis`) sketching the
+  shape of data a meeting-analysis MCP tool might produce. It's not wired
+  into any Buzz code path; it's a reference for the shapes used on the
+  Mission Control side.
 
-Agents are part of the room, not haunted cron jobs.
+We did **not** add an OpenAI-compatible provider, Ollama wiring, or a Gemma
+config to this repository — see [Local AI](#local-ai) below for what's
+actually true about model choice here.
 
 ---
 
-## Three little stories
+## At a glance
 
-**Incident memory.** It's 2am. You type *"have we seen this error before?"* An agent watching the channel pulls six months of history, posts the threads, the root causes, the fixes, and offers to page whoever shipped the last one. The whole exchange — question, answer, evidence — stays in the channel.
-
-**Branch as room.** You open a feature branch. A channel appears. Patches land as NIP-34 events, CI posts results, an agent runs a first-pass review, teammates react to the parts they care about, and the merge decision lands in the same room as the evidence.
-
-**A release that writes itself.** A workflow fires on a tag. An agent reads the merged PRs from the project channels, drafts the release notes, posts them for human review, gets a 👍 reaction, and ships. Every step signed. Every step searchable.
-
----
-
-## Works today · Being wired up · Strong opinions, pending code
-
-| ✅ Works today | 🚧 Being wired up | 💭 Strong opinions, pending code |
-|---|---|---|
-| Relay, channels, threads, DMs, canvases, media, search, audit log | Mobile clients (iOS + Android, Flutter) | Web-of-trust reputation across relays |
-| Desktop app (Tauri + React) | Workflow approval gates (infra exists, glue still drying) | Push notifications |
-| `buzz-cli` (agent-first, JSON in / JSON out) + ACP harness (Goose, Codex, Claude Code) | Huddle lifecycle events | Culture features |
-| YAML workflows: message / reaction / schedule / webhook triggers | | |
-| Git events (NIP-34: patches, repo announcements, status) | | |
-| Git hosting backend | | |
-
-<sub>Please do not plan your compliance program around the 💭 column yet. The <a href="VISION.md">VISION docs</a> are the long version of what we think this becomes.</sub>
-
----
-
-## Getting started
-
-New to Buzz? Pick the path that matches you.
-
-### I just want to try the app
-
-Grab a packaged build from the [latest release](https://github.com/block/buzz/releases/latest):
-
-| Platform | File |
+| | Role |
 |---|---|
-| macOS (Apple Silicon) | `Buzz_<version>_aarch64.dmg` |
-| macOS (Intel) | `Buzz_<version>_x64.dmg` |
-| Linux (x86_64) | `Buzz_<version>_amd64.AppImage` or `Buzz_<version>_amd64.deb` |
-| Windows (x64) | `Buzz_<version>_x64-setup_alpha-unsigned.exe` |
+| 💬 **Buzz** (this repo) | Shared team conversation — the channel Mission Control lives in |
+| 🧠 **Mission Control** ([separate repo](https://github.com/NewbieCae/mission-controle)) | The shared agent — plans, calls tools, replies in-channel |
+| 📄 **Docs** | Knowledge and reports, orchestrated from the Mission Control core |
+| 📊 **Grist** | Operational tracking, orchestrated from the Mission Control core |
 
-On a Mac, check the Apple menu > About This Mac: "Chip: Apple …" means Apple Silicon; "Processor: Intel …" means Intel.
-
-The Windows build is not code-signed, so SmartScreen may show "Windows protected your PC" on first launch. If available, click **More info**, then **Run anyway**.
-
-
-By default the app connects to `ws://localhost:3000`. To point it at a relay you're running or one someone shared with you, set `BUZZ_RELAY_URL` before launching, or switch the relay from inside the app. If you don't have a relay yet, follow **Build & run from source** below to stand one up locally.
-
-### I want my own hosted relay
-
-To run a relay for your team without managing servers, you can deploy one to Railway in a click:
-
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/buzz-relay-block)
-
-See [here](https://engineering.block.xyz/blog/run-your-own-buzz-relay) for details.
-
-### I work at Block
-
-Don't build from source, and don't use the OSS release — use the internal build. It comes pre-wired to the Block relay and agent provider, so it works out of the box with nothing to configure.
-
-Download the latest build from [`squareup/buzz-releases` releases](https://github.com/squareup/buzz-releases/releases/latest) and install it.
-
-### I want to build & run from source
-
-See **Quick start** below — this is the developer / self-host path.
+Docs and Grist are not part of this repository — they're tools Mission
+Control reaches through MCP, from the core project.
 
 ---
 
-## Quick start
+## Demo flow
 
-You'll need [Docker](https://docs.docker.com/get-docker/) and [Hermit](https://cashapp.github.io/hermit/) (or Rust 1.88+, Node 24+, pnpm 10+, `just`).
-
-**Once:**
-```bash
-git clone https://github.com/block/buzz.git && cd buzz
-. ./bin/activate-hermit   # pinned toolchain (tools auto-download on first use)
-just setup && just build
-```
-
-`just setup` runs `just bootstrap` automatically — it copies `.env.example` to `.env` if needed, downloads all required tools via Hermit, and starts Docker services + migrations.
-
-**Every day:**
-```bash
-. ./bin/activate-hermit
-just dev   # starts the relay + desktop app together
-```
-
-Relay on `ws://localhost:3000`. Desktop app pops up. You're in.
-
-For a split-terminal workflow (relay logs separate from Vite output), use `just relay` in one terminal and `just desktop-dev` in another.
-
-Want a single-node / VPS relay instead of the local-dev stack? Use the production Compose bundle in [`deploy/compose/`](deploy/compose/README.md) (`docker compose` + Postgres, Redis, MinIO, optional Caddy/TLS). The root [`docker-compose.yml`](docker-compose.yml) is for day-to-day development only.
-
-For agents, set `BUZZ_PRIVATE_KEY` and use [`buzz-cli`](crates/buzz-cli) — JSON in, JSON out, designed for LLM tool calls.
-
----
-
-## Windows prerequisites
-
-The agent shell tool runs commands under bash. On macOS and Linux that's already there; on Windows you need to bring it.
-
-Install [Git for Windows](https://git-scm.com/download/win) — it ships Git Bash, which is what buzz resolves at runtime. Once it's installed, everything works the same as on other platforms.
-
-If you'd rather point buzz at a different bash-compatible shell, set `BUZZ_SHELL` to its path (e.g. `BUZZ_SHELL=C:\path\to\bash.exe`). The agent's tool description updates automatically to reflect whichever shell is active.
+1. Several teammates are discussing a project in a Buzz channel.
+2. Someone writes: `@Mission Control, organise le suivi.`
+3. Mission Control, running as a Buzz agent, uses whichever MCP servers it's
+   been configured with (declared via `--mcp-servers-file`) to act on that
+   request.
+4. The actual Docs/Grist workflow logic runs in the Mission Control core
+   repository; this fork only carries the request into the channel and back.
 
 ---
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                             Clients                                     │
-│  Human client         AI agent              CLI / scripts               │
-│  (Buzz desktop)       (Goose, Codex, ...)   (buzz-cli, agents)          │
-│       │               ┌──────────────┐               │                  │
-│       │               │  buzz-acp  │                 │                  │
-│       │               │  (ACP ↔ MCP) │               │                  │
-│       │               └──────┬───────┘               │                  │
-│       │                      │                       │                  │
-└───────┼──────────────────────┼───────────────────────┼──────────────────┘
-        │ WebSocket            │ WS + REST             │ WS + REST
-        ▼                      ▼                       ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          buzz-relay                                     │
-│  NIP-01 · NIP-42 auth · channel/DM/media/workflow/git REST · audit log  │
-└───┬──────────────────────────┬──────────────────────────┬───────────────┘
-    │                          │                          │
- ┌──▼───────────┐       ┌──────▼──────┐           ┌───────▼─────┐
- │   Postgres   │       │    Redis    │           │   S3/MinIO  │
- │ (events +    │       │  (pub/sub)  │           │  (Blossom)  │
- │  FTS search) │       └─────────────┘           └─────────────┘
- └──────────────┘
+```mermaid
+flowchart TD
+    subgraph Buzz["Buzz (this repo)"]
+        Team["Team members\nin a channel"]
+        Relay["buzz-relay"]
+        ACP["buzz-acp\nagent harness"]
+        Team -->|"messages / mentions"| Relay
+        Relay --> ACP
+    end
+
+    ACP -->|"spawns"| Agent["Mission Control agent process\n(configured per mission-controle)"]
+    Agent -->|"model calls"| LLM["LLM\n(local or hosted,\nconfigured on the agent side)"]
+    Agent -->|"stdio MCP,\nper --mcp-servers-file"| MCP1["Docs MCP"]
+    Agent -->|"stdio MCP"| MCP2["Grist MCP"]
+    Agent -->|"stdio MCP"| MCP3["... other MCP tools"]
 ```
 
-A Rust workspace of focused crates. Single source of truth: the relay. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full breakdown.
-
-<details>
-<summary><strong>Crate map</strong></summary>
-
-**Core protocol** — `buzz-core` (zero-I/O types, NIP-01 filters, Schnorr verify) · `buzz-relay` (Axum WS + REST)
-
-**Services** — `buzz-db` (Postgres) · `buzz-auth` (NIP-42/98 Schnorr auth, rate limiting) · `buzz-pubsub` (Redis, presence, typing) · `buzz-search` (Postgres FTS) · `buzz-audit` (hash-chain log). Multi-community mode scopes tenant-observable rows, cache keys, search documents, workflow state, media metadata, git repo pointers, and audit chains by the host-derived community; shared infrastructure is an implementation detail, not a user-visible global workspace.
-
-**Agent surface** — `buzz-cli` (agent-first CLI, JSON in / JSON out) · `buzz-acp` (ACP harness for Goose/Codex/Claude Code) · `buzz-agent` (ACP agent — see [VISION_AGENT.md](VISION_AGENT.md)) · `buzz-dev-mcp` (shell + file-edit tools) · `buzz-workflow` (YAML automation) · `buzz-persona` (agent persona packs)
-
-**Git & pairing** — `git-sign-nostr` / `git-credential-nostr` (nostr-signed git) · `buzz-pair-relay` / `buzz-pairing-cli` (relay pairing)
-
-**Shared** — `buzz-sdk` (typed event builders) · `buzz-media` (Blossom/S3)
-
-**Tooling** — `buzz-admin` (admin CLI) · `buzz-test-client` (E2E)
-
-</details>
+`buzz-acp` is agent-agnostic — it spawns whatever binary
+`BUZZ_ACP_AGENT_COMMAND` points to and, on top of the legacy single-server
+path, now hands it every MCP server declared in `--mcp-servers-file`. What
+that agent binary does internally (model choice, prompting, MCP-tool logic)
+belongs to the Mission Control core repository.
 
 ---
 
-## Going further
+## Multi-MCP support
 
-- **[VISION.md](VISION.md)** · **[VISION_SOVEREIGN.md](VISION_SOVEREIGN.md)** · **[VISION_PROJECTS.md](VISION_PROJECTS.md)** · **[VISION_AGENT.md](VISION_AGENT.md)** — the four vision docs
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — system design, kind ranges, subsystem boundaries
-- **[TESTING.md](TESTING.md)** — multi-agent E2E test suite
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** · **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** · **[SECURITY.md](SECURITY.md)** · **[GOVERNANCE.md](GOVERNANCE.md)**
+`--mcp-servers-file <path>` (or `BUZZ_ACP_MCP_SERVERS_FILE`) points to a JSON
+file listing additional stdio MCP servers for the agent. Example shape
+(placeholders only — see [`.env.example`](.env.example) for the canonical
+reference):
 
-<details>
-<summary><strong>Configuration</strong> (env vars, defaults work for local dev)</summary>
+```json
+[
+  {
+    "name": "docs",
+    "command": "/path/to/docs-mcp-server",
+    "args": [],
+    "env": [{ "name": "DOCS_SOURCE", "value": "team-workspace" }]
+  },
+  {
+    "name": "grist",
+    "command": "/path/to/grist-mcp-server",
+    "args": [],
+    "env": [{ "name": "GRIST_API_URL", "value": "https://grist.example" }]
+  }
+]
+```
 
-All defaults work out of the box. Override via `.env`. Full reference in [`.env.example`](.env.example).
+These servers do **not** receive `BUZZ_PRIVATE_KEY`, `BUZZ_RELAY_URL`, or
+`BUZZ_AUTH_TAG` automatically — only the `env` entries you list per server.
+If you also set `--mcp-command` (the legacy single-server flag), both sets
+of servers are handed to the agent together.
 
-</details>
+---
 
-<details>
-<summary><strong>Common dev commands</strong></summary>
+## Local AI
+
+`buzz-acp` doesn't care what's behind the agent binary it spawns — it just
+runs a process and speaks ACP/MCP to it. Model and provider choice (including
+whether inference runs against a local, OpenAI-compatible endpoint) is a
+property of that agent process, configured on the **Mission Control core**
+side, not something this fork's code implements or hardcodes.
+
+If your Mission Control setup runs its model locally: **primary AI inference
+runs locally.** That does not mean the whole system is offline — Buzz itself
+talks to a relay over the network, and any MCP tool (Docs, Grist, etc.) may
+call out to its own service. See the Mission Control core repository for the
+actual inference configuration.
+
+---
+
+## Repository relationship
+
+| Repository | Role | Branch |
+|---|---|---|
+| [NewbieCae/mission-controle](https://github.com/NewbieCae/mission-controle) | Orchestration core + MCP integrations | `feat/mission-control-ai` |
+| [NewbieCae/buzz](https://github.com/NewbieCae/buzz) (this repo) | Collaborative interface + Mission Control agent integration | `mission-control-mvp` |
+
+Both are part of the same DINUM × 42 Hackathon 2026 project. Together, these
+two repositories form the complete Mission Control hackathon integration.
+
+---
+
+## Running the Mission Control integration
+
+Build and run this fork the same way as upstream Buzz — see
+[Quick start](#quick-start) below. To actually run Mission Control as an
+agent, you additionally need:
 
 ```bash
-just setup          # Docker, migrations, desktop deps
-just relay          # Run the relay
-just dev            # Run the desktop app
-just build          # Build the Rust workspace
-just check          # fmt + clippy + desktop check
-just test-unit      # Unit tests (no infra required)
-just test           # Full suite (starts services if needed)
-just ci             # Everything CI runs
-just reset          # ⚠️  Wipe data + recreate
+# Point buzz-acp at whatever binary runs the Mission Control agent
+BUZZ_ACP_AGENT_COMMAND=<mission-control-agent-binary>
+
+# Declare its MCP tool servers (Docs, Grist, ...) — see Multi-MCP support above
+BUZZ_ACP_MCP_SERVERS_FILE=/path/to/mcp-servers.json
 ```
 
-</details>
+The agent binary itself — how it's built, what model it calls, and how it
+talks to Docs/Grist through MCP — is set up per the instructions in
+[NewbieCae/mission-controle](https://github.com/NewbieCae/mission-controle).
+This repository only provides the channel and the multi-server launch
+mechanism.
 
 ---
 
-## What it is not
+## Security / development notes
 
-- Not blockchain. Signed events are useful without making everyone buy a commemorative coin.
-- Not an AI replacement plan. Buzz works best when humans stay in the loop and agents stay in the room.
-- Not finished. We will tell you what works and what doesn't.
+This is a hackathon integration, not a hardened deployment. MCP servers
+declared via `--mcp-servers-file` are treated as external/untrusted by
+default (no automatic Buzz credentials), but running arbitrary stdio
+commands as MCP servers is still process execution on your machine — only
+point it at servers you trust. Production use would need proper credential
+scoping and permission review beyond what a hackathon timeline allows.
 
-**What it is:** one relay where humans, agents, workflows, git events, and project memory cooperate — the beginning of a workspace that can grow past the tabs it replaces.
+---
+
+## Current limitations
+
+- Multi-MCP support only covers the stdio transport, and server definitions
+  are static (loaded once from a file at startup, not hot-reloaded).
+- The `examples/mission-control/` Python module is illustrative only — it's
+  not imported or tested by anything in this repo.
+- This fork carries no changes to model/provider selection; that logic lives
+  entirely in the Mission Control core repository.
+
+---
+
+## Upstream Buzz
+
+This repository is a fork of **[block/buzz](https://github.com/block/buzz)**,
+built by [Block, Inc.](https://block.xyz) and licensed under
+[Apache 2.0](LICENSE). All Mission Control-specific work described above
+lives on the `mission-control-mvp` branch; everything else — the relay,
+desktop/mobile clients, `buzz-cli`, the ACP harness, and the workspace model
+— is upstream Buzz. See the original project's [README](https://github.com/block/buzz#readme)
+and [VISION.md](VISION.md) for what Buzz is on its own terms.
+
+---
+
+## Quick start
+
+Building and running this fork works exactly like upstream Buzz. You'll need
+[Docker](https://docs.docker.com/get-docker/) and [Hermit](https://cashapp.github.io/hermit/)
+(or Rust 1.88+, Node 24+, pnpm 10+, `just`).
+
+```bash
+git clone https://github.com/NewbieCae/buzz.git && cd buzz
+git checkout mission-control-mvp
+. ./bin/activate-hermit
+just setup && just build
+just dev   # starts the relay + desktop app together
+```
+
+See upstream's [Getting started](https://github.com/block/buzz#getting-started)
+for the full range of options (packaged builds, hosted relays, Windows
+prerequisites). For the agent-facing configuration specific to this fork, see
+[Running the Mission Control integration](#running-the-mission-control-integration)
+above.
+
+---
+
+## Built during
+
+**DINUM × 42 Hackathon — 2026**
+
+Team: Souhil · Céline · Diouf · Joudy · Shruti · Maria
 
 ---
 
 <p align="center">
-  <sub>Buzz 🐝</sub><br>
-  <sub>Apache 2.0 · Built by <a href="https://block.xyz">Block, Inc.</a></sub>
+  <sub>Buzz is Apache 2.0, built by <a href="https://block.xyz">Block, Inc.</a> — this fork's Mission Control work is a hackathon contribution on top of it.</sub>
 </p>
